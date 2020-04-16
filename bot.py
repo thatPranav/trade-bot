@@ -17,39 +17,63 @@ data = data.set_index('Date')
 print(data.index.min(), data.index.max())
 print(data.head())
 
-
 date_split = '2016-01-01'
 train = data[:date_split]
 test = data[date_split:]
-print(len(train),len(test))
+print(len(train), len(test))
+
 
 def plot_train_test(train, test, date_split):
-
     data = [
-        Candlestick(x=train.index, open=train['Open'], high=train['High'], low=train['Low'], close=train['Close'], name='train'),
-        Candlestick(x=test.index, open=test['Open'], high=test['High'], low=test['Low'], close=test['Close'], name='test')
+        Candlestick(x=train.index, open=train['Open'], high=train['High'], low=train['Low'], close=train['Close'],
+                    name='train'),
+        Candlestick(x=test.index, open=test['Open'], high=test['High'], low=test['Low'], close=test['Close'],
+                    name='test')
     ]
     layout = {
-         'shapes': [
-             {'x0': date_split, 'x1': date_split, 'y0': 0, 'y1': 1, 'xref': 'x', 'yref': 'paper', 'line': {'color': 'rgb(0,0,0)', 'width': 1}}
-         ],
+        'shapes': [
+            {'x0': date_split, 'x1': date_split, 'y0': 0, 'y1': 1, 'xref': 'x', 'yref': 'paper',
+             'line': {'color': 'rgb(0,0,0)', 'width': 1}}
+        ],
         'annotations': [
-            {'x': date_split, 'y': 1.0, 'xref': 'x', 'yref': 'paper', 'showarrow': False, 'xanchor': 'left', 'text': ' test data'},
-            {'x': date_split, 'y': 1.0, 'xref': 'x', 'yref': 'paper', 'showarrow': False, 'xanchor': 'right', 'text': 'train data '}
+            {'x': date_split, 'y': 1.0, 'xref': 'x', 'yref': 'paper', 'showarrow': False, 'xanchor': 'left',
+             'text': ' test data'},
+            {'x': date_split, 'y': 1.0, 'xref': 'x', 'yref': 'paper', 'showarrow': False, 'xanchor': 'right',
+             'text': 'train data '}
         ]
     }
     figure = Figure(data=data, layout=layout)
     iplot(figure)
 
+
 plot_train_test(train, test, date_split)
 
- def step(self, act):
-        reward = 0
 
+class Environment1:
+
+    def __init__(self, data, history_t=90):
+        self.data = data
+        self.history_t = history_t
+        self.reset()
+
+    def reset(self):
+        self.t = 0
+        self.done = False
+        self.profits = 0
+        self.positions = []
+        self.position_value = 0
+        self.history = [0 for _ in range(self.history_t)]
+        return [self.position_value] + self.history  # obs
+
+    def step(self, act):
+        reward = 0
+        print("self.t", self.t)
         # act = 0: stay, 1: buy, 2: sell
         if act == 1:
             self.positions.append(self.data.iloc[self.t, :]['Close'])
-        elif act == 2: # sell
+            print("self.data.iloc[self.t, :]['Close']", self.data.iloc[self.t, :]['Close'])
+
+        elif act == 2:  # sell
             if len(self.positions) == 0:
                 reward = -1
             else:
@@ -67,30 +91,30 @@ plot_train_test(train, test, date_split)
         for p in self.positions:
             self.position_value += (self.data.iloc[self.t, :]['Close'] - p)
         self.history.pop(0)
-        self.history.append(self.data.iloc[self.t, :]['Close'] - self.data.iloc[(self.t-1), :]['Close'])
-        if (self.t==len(self.data)-1):
-            self.done=True
+        self.history.append(self.data.iloc[self.t, :]['Close'] - self.data.iloc[(self.t - 1), :]['Close'])
+        if (self.t == len(self.data) - 1):
+            self.done = True
         # clipping reward
         if reward > 0:
             reward = 1
         elif reward < 0:
             reward = -1
-        #print ("t={%d}, done={%str}"%(self.t,self.done))
-        return [self.position_value] + self.history, reward, self.done # obs, reward, done
+        # print ("t={%d}, done={%str}"%(self.t,self.done))
+        return [self.position_value] + self.history, reward, self.done  # obs, reward, done
+
 
 env = Environment1(train)
 print(env.reset())
 for _ in range(3):
     pact = np.random.randint(3)
-    print (pact)
+    print(pact)
     print(env.step(pact))
 
 
 class Q_Network(nn.Module):
 
-    def __init__(self,obs_len,hidden_size,actions_n):
-
-        super(Q_Network,self).__init__()
+    def __init__(self, obs_len, hidden_size, actions_n):
+        super(Q_Network, self).__init__()
 
         self.fc_val = nn.Sequential(
             nn.Linear(obs_len, hidden_size),
@@ -100,14 +124,14 @@ class Q_Network(nn.Module):
             nn.Linear(hidden_size, actions_n)
         )
 
-
-    def forward(self,x):
-        h =  self.fc_val(x)
+    def forward(self, x):
+        h = self.fc_val(x)
         return (h)
 
-hidden_size=100
-input_size=env.history_t+1
-output_size=3
+
+hidden_size = 100
+input_size = env.history_t + 1
+output_size = 3
 USE_CUDA = False
 LR = 0.001
 
@@ -121,7 +145,7 @@ loss_function = nn.MSELoss()
 optimizer = optim.Adam(list(Q.parameters()), lr=LR)
 
 epoch_num = 50
-step_max = len(env.data)-1
+step_max = len(env.data) - 1
 memory_size = 200
 batch_size = 50
 gamma = 0.97
@@ -173,7 +197,7 @@ for epoch in range(epoch_num):
                 shuffled_memory = np.random.permutation(memory)
                 memory_idx = range(len(shuffled_memory))
                 for i in memory_idx[::batch_size]:
-                    batch = np.array(shuffled_memory[i:i+batch_size])
+                    batch = np.array(shuffled_memory[i:i + batch_size])
                     b_pobs = np.array(batch[:, 0].tolist(), dtype=np.float32).reshape(batch_size, -1)
                     b_pact = np.array(batch[:, 1].tolist(), dtype=np.int32)
                     b_reward = np.array(batch[:, 2].tolist(), dtype=np.int32)
@@ -182,10 +206,10 @@ for epoch in range(epoch_num):
 
                     q = Q(torch.from_numpy(b_pobs))
                     q_ = Q_ast(torch.from_numpy(b_obs))
-                    maxq = np.max(q_.data.numpy(),axis=1)
+                    maxq = np.max(q_.data.numpy(), axis=1)
                     target = copy.deepcopy(q.data)
                     for j in range(batch_size):
-                        target[j, b_pact[j]] = b_reward[j]+gamma*maxq[j]*(not b_done[j])
+                        target[j, b_pact[j]] = b_reward[j] + gamma * maxq[j] * (not b_done[j])
                     Q.zero_grad()
                     loss = loss_function(q, target)
                     total_loss += loss.data.item()
@@ -208,22 +232,21 @@ for epoch in range(epoch_num):
         total_rewards.append(total_reward)
         total_losses.append(total_loss)
 
-        if (epoch+1) % show_log_freq == 0:
-            log_reward = sum(total_rewards[((epoch+1)-show_log_freq):])/show_log_freq
-            log_loss = sum(total_losses[((epoch+1)-show_log_freq):])/show_log_freq
-            elapsed_time = time.time()-start
-            print('\t'.join(map(str, [epoch+1, epsilon, total_step, log_reward, log_loss, elapsed_time])))
+        if (epoch + 1) % show_log_freq == 0:
+            log_reward = sum(total_rewards[((epoch + 1) - show_log_freq):]) / show_log_freq
+            log_loss = sum(total_losses[((epoch + 1) - show_log_freq):]) / show_log_freq
+            elapsed_time = time.time() - start
+            print('\t'.join(map(str, [epoch + 1, epsilon, total_step, log_reward, log_loss, elapsed_time])))
             start = time.time()
 
-#return Q, total_losses, total_rewards
+# return Q, total_losses, total_rewards
 
 test_env = Environment1(test)
 pobs = test_env.reset()
 test_acts = []
 test_rewards = []
 
-for _ in range(len(test_env.data)-1):
-
+for _ in range(len(test_env.data) - 1):
     pact = Q(torch.from_numpy(np.array(pobs, dtype=np.float32).reshape(1, -1)))
     pact = np.argmax(pact.data)
     test_acts.append(pact.item())
